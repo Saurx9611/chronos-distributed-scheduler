@@ -1,0 +1,31 @@
+name: chronos
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chronos}
+      POSTGRES_DB: ${POSTGRES_DB:-chronos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    profiles: [foundation]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile
+    ports: ["127.0.0.1:8000:8000"]
+  frontend:
+    profiles: [foundation]
+    build:
+      context: frontend
+      dockerfile: ../infrastructure/docker/frontend.Dockerfile
+    ports: ["127.0.0.1:3000:3000"]
+volumes:
+  postgres_data:
