@@ -2,7 +2,7 @@
 
 PostgreSQL-backed distributed task scheduling and execution infrastructure.
 
-**Status: Phase 1 — architecture and repository foundation.** The only API operation
+**Status: Phase 1 complete — architecture and repository foundation.** The only API operation
 implemented is process liveness. There is no queue execution, auth, recurring daemon,
 production deployment or benchmark yet. The frontend states this scope explicitly.
 
@@ -13,6 +13,7 @@ production deployment or benchmark yet. The frontend states this scope explicitl
 - [PostgreSQL research](docs/POSTGRESQL_RESEARCH.md), [ADRs](docs/adr/0001-postgresql-queue.md)
 - [Threat model](docs/THREAT_MODEL.md), [roadmap](docs/ROADMAP.md)
 - [Verified state and next steps](docs/PROJECT_STATE.md)
+- [Phase 1 CI and local verification evidence](docs/VERIFICATION.md)
 
 ## Prerequisites
 
