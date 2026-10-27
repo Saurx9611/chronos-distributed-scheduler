@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-10-27. Phase 3 independent workers implemented; final hosted verification pending.
+Updated: 2026-10-27. Phase 3 complete; local and hosted verification passed.
 
 ## Phase 3 implementation and gates
 
@@ -11,9 +11,16 @@ Updated: 2026-10-27. Phase 3 independent workers implemented; final hosted verif
 - Migration 0002 records execution dispatch/result and worker lifecycle state.
 - Compose's workers profile runs PostgreSQL, one migrator and three independent
   workers. Signals, lease loss, DB disconnects and timeouts stop or abandon work safely.
-- Local database/runtime and handler tests passed; six real Linux Compose scenarios
+- Local database/runtime and handler tests: 59 passed; six real Linux Compose scenarios
   passed, including SIGTERM, SIGKILL, forced drain and PostgreSQL stop/restart.
 - See WORKER_RUNTIME.md and PHASE3_VERIFICATION.md for exact reproduction and evidence.
+- Implementation commit: `46148810170ebeb873946e3a618612c7257433ed`.
+  [Hosted CI](https://github.com/Saurx9611/chronos-distributed-scheduler/actions/runs/40483607490)
+  passed all four jobs, including all six Linux process scenarios. Redacted logs,
+  facts and JUnit were uploaded as worker-process-evidence.
+- Local project chronos-phase3-demo is running PostgreSQL on loopback port 15434
+  with three workers; 12 seeded mixed workloads all succeeded. This is a local demo,
+  not a cloud deployment. Its connection environment remains in ignored .tools storage.
 
 Phase 1/2 evidence below is historical. Remaining current limits: no authenticated
 job HTTP API, recurring generation, production deployment, downstream exactly-once

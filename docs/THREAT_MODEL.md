@@ -1,5 +1,15 @@
 # Threat model — Phase 1 baseline
 
+Phase 3 update: worker execution now exists behind trusted database access, without
+public job HTTP endpoints. Only four typed built-in data workloads are allowed;
+no paths, URLs, imports, shell commands or submitted code are executed. Handlers
+run as fixed child modules with bounded JSON IPC and without DB credentials.
+Compose workers run nonroot with dropped capabilities, read-only filesystems and
+resource limits. Parent-death and lease guards limit orphan work; they do not provide
+an untrusted-code sandbox or exactly-once remote effects. Result JSON can contain
+job data and must remain tenant-authorized before a future API exposes it. Runtime
+DB grants and durable audit protection remain production release gates.
+
 Assets: API keys, job payloads, job/schedule integrity, lease ownership, tenant data,
 database credentials, audit history and execution capacity. Trust boundaries: browser
 to API, API to PostgreSQL, workers to handler effects, CI to source/artifacts, and cloud

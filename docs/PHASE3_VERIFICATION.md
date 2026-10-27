@@ -2,11 +2,19 @@
 
 Date: 2026-10-27. Local PostgreSQL 18.6 in Linux Docker containers; host Python 3.14.7
 and worker-image Python 3.14.10. No new runtime packages were required. Dependencies
-remain locked in uv.lock. The final hosted run reference is recorded after publication.
+remain locked in uv.lock.
+
+Implementation commit: `46148810170ebeb873946e3a618612c7257433ed`.
+[Hosted CI](https://github.com/Saurx9611/chronos-distributed-scheduler/actions/runs/40483607490)
+passed all four jobs: Python/database/runtime, frontend, container builds and
+worker-processes. The last job reran all six real Linux scenarios on the final image
+and successfully uploaded the worker-process-evidence artifact (logs, facts, JUnit).
+This report's final update changes documentation only; runtime evidence is tied to
+that immutable implementation commit.
 
 ## Executed checks
 
-- Database/runtime/handler tests: passed, including child execution/results,
+- Database/runtime/handler tests: **59 passed**, including child execution/results,
   cancellation, lease-uncertainty abandonment, unusable-window preflight, unknown
   handlers, protocol validation and redaction of unexpected handler exceptions.
 - Full real Compose process suite: **6 passed** in 226.24 seconds in the initial
@@ -45,14 +53,15 @@ external effects after pauses, clock steps or ambiguous outcomes.
 
 The following JSON records are copied from a real local run; timestamps remain UTC.
 Job IDs are actual test IDs. Payloads/results, ownership tokens, credentials and
-exception text are deliberately absent. Full generated logs are local/CI artifacts.
+exception text are deliberately absent. Full generated logs are local/CI artifacts;
+a curated exact excerpt is also committed as examples/worker-lifecycle.jsonl.
 
 ```json
-{"timestamp": "2026-10-27T09:36:15.378195+00:00", "event": "job_claimed", "job_id": "e0f85c3a-3999-485f-9e8f-60aa5c7f45c7", "worker_id": "3d92c2fb-6688-4224-8b5a-3580c583d8ae", "generation": 1, "job_type": "notification"}
-{"timestamp": "2026-10-27T09:36:15.490050+00:00", "event": "job_started", "job_id": "e0f85c3a-3999-485f-9e8f-60aa5c7f45c7", "worker_id": "3d92c2fb-6688-4224-8b5a-3580c583d8ae", "generation": 1, "job_type": "notification"}
-{"timestamp": "2026-10-27T09:36:28.775214+00:00", "event": "job_claimed", "job_id": "e0f85c3a-3999-485f-9e8f-60aa5c7f45c7", "worker_id": "da3e36b0-3a83-4b1e-bf9c-781863eef0f2", "generation": 2, "job_type": "notification"}
-{"timestamp": "2026-10-27T09:36:28.835003+00:00", "event": "job_started", "job_id": "e0f85c3a-3999-485f-9e8f-60aa5c7f45c7", "worker_id": "da3e36b0-3a83-4b1e-bf9c-781863eef0f2", "generation": 2, "job_type": "notification"}
-{"timestamp": "2026-10-27T09:36:34.140993+00:00", "event": "job_succeeded", "job_id": "e0f85c3a-3999-485f-9e8f-60aa5c7f45c7", "worker_id": "da3e36b0-3a83-4b1e-bf9c-781863eef0f2", "generation": 2, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:44:51.755139+00:00", "event": "job_claimed", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "56f53091-39e0-404a-a3af-89ef81d3a093", "generation": 1, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:44:51.821001+00:00", "event": "job_started", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "56f53091-39e0-404a-a3af-89ef81d3a093", "generation": 1, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:45:08.016117+00:00", "event": "job_claimed", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "ab553bae-4042-464e-993d-8d2a86d3b884", "generation": 2, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:45:08.080110+00:00", "event": "job_started", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "ab553bae-4042-464e-993d-8d2a86d3b884", "generation": 2, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:45:13.469627+00:00", "event": "job_succeeded", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "ab553bae-4042-464e-993d-8d2a86d3b884", "generation": 2, "job_type": "notification"}
 ```
 
 The database attempt history for that killed job was `(generation=1, lease_expired)`
@@ -71,3 +80,20 @@ No production cloud deployment, load benchmark, database failover certification,
 authenticated job API or real notification service exists yet. Native non-Linux
 forced-parent-death semantics are not certified by Linux container tests. Handler
 isolation permits only trusted registered code; it is not an untrusted-code sandbox.
+Wire-level lost-COMMIT-response injection remains an additional fault-coverage task;
+the runtime conservatively abandons uncertain outcomes rather than blindly replaying effects.
+
+## Running local demo
+
+The chronos-phase3-demo Compose project was left running with three workers and
+PostgreSQL bound to 127.0.0.1:15434. All 12 seeded mixed workloads succeeded. Inspect
+or stop this local instance without printing its connection environment:
+
+```sh
+docker compose --env-file .tools/phase3-demo.env -p chronos-phase3-demo --profile workers ps
+docker compose --env-file .tools/phase3-demo.env -p chronos-phase3-demo --profile workers logs -f worker-1 worker-2 worker-3
+docker compose --env-file .tools/phase3-demo.env -p chronos-phase3-demo --profile workers stop
+```
+
+The ignored environment file is local to this workspace; fresh clones follow the
+portable .env setup and commands in WORKER_RUNTIME.md. Stopping retains local data.

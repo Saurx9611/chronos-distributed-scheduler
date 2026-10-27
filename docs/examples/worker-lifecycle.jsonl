@@ -1,0 +1,5 @@
+{"timestamp": "2026-10-27T09:44:51.755139+00:00", "event": "job_claimed", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "56f53091-39e0-404a-a3af-89ef81d3a093", "generation": 1, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:44:51.821001+00:00", "event": "job_started", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "56f53091-39e0-404a-a3af-89ef81d3a093", "generation": 1, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:45:08.016117+00:00", "event": "job_claimed", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "ab553bae-4042-464e-993d-8d2a86d3b884", "generation": 2, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:45:08.080110+00:00", "event": "job_started", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "ab553bae-4042-464e-993d-8d2a86d3b884", "generation": 2, "job_type": "notification"}
+{"timestamp": "2026-10-27T09:45:13.469627+00:00", "event": "job_succeeded", "job_id": "63551664-0cfa-4c33-a6e0-77d643caff9c", "worker_id": "ab553bae-4042-464e-993d-8d2a86d3b884", "generation": 2, "job_type": "notification"}
