@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-10-27. Phase 2 transactional queue implemented; hosted verification pending.
+Updated: 2026-10-27. Phase 2 transactional queue complete; local and hosted gates passed.
 
 ## Phase 2 implementation and local gates
 
@@ -18,11 +18,15 @@ Updated: 2026-10-27. Phase 2 transactional queue implemented; hosted verificatio
   80 distinct jobs, 80 tokens and consistent ownership records.
 - ADR-0005 records priority/starvation tradeoffs, execution deadlines, idempotency
   reservations and the narrowed Phase 2 scope requested by the user.
+- Implementation commit: `93a793e82210b832ea7df17c72f4316da7c6689d`.
+  [Hosted CI](https://github.com/Saurx9611/chronos-distributed-scheduler/actions/runs/40479244896)
+  passed all three jobs; individual test/type/lint/audit/container steps were inspected.
+  See PHASE2_VERIFICATION.md for the validation matrix.
 
 The earlier Phase 1 evidence below remains historical. Current limitations:
 no handler execution process, authenticated job HTTP API, recurring generator,
 automatic DB transaction retries, production audit grants, deployment or benchmark.
-Do not move into those phases until the database gates pass.
+Database gates passed; no later-phase implementation was started.
 
 ## Implemented
 
@@ -70,7 +74,7 @@ production hardening remain release gates. No cloud resources or costs were incu
 
 ## Next step
 
-After Phase 2 hosted verification, the next recommended step is the separately
-scoped Phase 2B authenticated job API, before any public job operations. Phase 3
-then implements bounded handler execution and process-crash fault injection.
+Next recommended step: Phase 3 bounded handler execution, heartbeat/recovery loops,
+graceful shutdown and process-crash fault injection. Implement the separately
+tracked authenticated API gate before any public job operations or dashboard integration.
 No later phase is authorized implicitly by this phase's completion.

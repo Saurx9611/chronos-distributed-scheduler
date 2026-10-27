@@ -5,7 +5,14 @@ running in an isolated Docker Compose project. This is correctness testing, not 
 
 Local result: **42 passed, zero skips**. Ruff lint/format and strict mypy including
 integration tests passed. Alembic reports 0001 (head); tests exercised fresh upgrade,
-downgrade and re-upgrade. Hosted run reference will be recorded after publication.
+downgrade and re-upgrade.
+
+Implementation commit: `93a793e82210b832ea7df17c72f4316da7c6689d`.
+[Hosted CI run](https://github.com/Saurx9611/chronos-distributed-scheduler/actions/runs/40479244896)
+passed. Each job and step was inspected: Python locked install, lint/format, strict
+types, real PostgreSQL tests, advisory scan and migration head; frontend clean install,
+lint/types/production build/audit; Compose validation and both container image builds.
+The CI environment requires a database URL rather than silently skipping DB tests.
 
 Evidence covered:
 
