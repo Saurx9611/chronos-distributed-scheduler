@@ -41,6 +41,14 @@ async def run_handler(claim: Claim) -> Reply:
             "TEMP",
             "LANG",
             "HOME",
+            "CHRONOS_DEMO_SINK_URL",
+            "CHRONOS_DEMO_SINK_TOKEN",
+            "CHRONOS_ENABLE_EFFECT_DEMO",
+            "CHRONOS_DEMO_ALLOW_UNSAFE",
+            "CHRONOS_FAULT_INJECTION",
+            "CHRONOS_FAULT_POINT",
+            "CHRONOS_FAULT_WORKER",
+            "CHRONOS_WORKER_NAME",
         }
     }
     child_env["CHRONOS_EXPECTED_PARENT_PID"] = str(os.getpid())
@@ -70,6 +78,7 @@ async def run_handler(claim: Claim) -> Reply:
                 "generation": claim.generation,
                 "job_type": claim.job_type,
                 "payload": claim.payload,
+                "effect_key": str(claim.effect_key or claim.job_id),
             },
             allow_nan=False,
             ensure_ascii=False,

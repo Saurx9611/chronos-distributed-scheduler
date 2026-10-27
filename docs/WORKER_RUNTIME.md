@@ -3,7 +3,9 @@
 `python -m chronos.worker` is a standalone Python service. It neither imports nor
 starts FastAPI. Compose runs worker-1, worker-2 and worker-3 as separate containers
 and process trees, coordinated only by PostgreSQL. A single migration service must
-complete before they start. This version requires schema revision 0002.
+complete before they start. Phase 4 now requires schema revision 0003; its additional
+recovery/retry/audit contracts and opt-in independent effect demonstration are in
+FAULT_TOLERANCE.md. The rest of this document records the Phase 3 runtime baseline.
 
 ```mermaid
 flowchart LR

@@ -1,7 +1,9 @@
 # Proposed HTTP API (Phase 2 onward)
 
-Only GET /health/live is implemented today. All /v1 and /metrics endpoints below
-are design contracts. Publish generated OpenAPI from typed Pydantic models when built.
+Implemented as of Phase 4: GET /health/live, POST /v1/jobs/{id}/retry,
+POST /v1/jobs/{id}/replay and GET /v1/workers. Read FAULT_TOLERANCE.md for their
+actual auth, idempotency, retry-versus-replay semantics and setup. Other endpoints
+below remain design contracts. OpenAPI exposes only implemented routes.
 
 Bearer API keys are stored as keyed hashes, scoped to tenant and roles: viewer,
 operator, admin. Job write requires operator, schedule edits require admin; all
@@ -16,7 +18,9 @@ an allowlist of harmless handlers. CSRF protection applies to cookie-auth writes
 | GET /v1/jobs/{id} | Job details, timestamps, state, generation; no lease token or secret fields. |
 | GET /v1/jobs/{id}/attempts | Cursor-paginated redacted history and outcome, duration, error code. |
 | POST /v1/jobs/{id}/cancel | 202 running -> cancel_requested; 200 queued/retry_wait -> cancelled or already terminal; no rollback of side effects. |
-| POST /v1/jobs/{id}/replay | New idempotent submission referencing terminal parent; 409 if parent is nonterminal. |
+| POST /v1/jobs/{id}/retry | Implemented: dead-letter parent -> new job preserving effect identity; authenticated operator/admin and Idempotency-Key required. |
+| POST /v1/jobs/{id}/replay | Implemented: terminal parent -> new job with new effect identity; 409 if parent is nonterminal. |
+| GET /v1/workers | Implemented: infrastructure-admin health view, DB-time expiry, <=100 newest registrations; no heartbeat tokens. |
 | POST /v1/schedules | UTC fixed interval >= 60s, job template, start_at and misfire policy; Idempotency-Key required. |
 | PATCH /v1/schedules/{id} | If-Match revision required; edit/enable/disable under row lock; 409 stale revision. |
 | GET /v1/schedules[/{id}] | Tenant-scoped reads, cursor pagination. |

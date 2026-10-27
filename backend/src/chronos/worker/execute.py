@@ -26,8 +26,11 @@ class Request(BaseModel):
     model_config = ConfigDict(extra="forbid")
     job_id: UUID
     generation: int
-    job_type: Literal["image_metadata", "csv_transform", "synthetic_report", "notification"]
+    job_type: Literal[
+        "image_metadata", "csv_transform", "synthetic_report", "notification", "demo_effect"
+    ]
     payload: dict[str, JsonValue]
+    effect_key: UUID | None = None
 
 
 def protect_parent_lifetime() -> None:
@@ -63,7 +66,7 @@ async def execute() -> dict[str, JsonValue]:
     try:
         request = Request.model_validate_json(sys.stdin.buffer.read(131073))
         result = await HANDLERS[request.job_type](
-            request.payload, Context(request.job_id, request.generation)
+            request.payload, Context(request.job_id, request.generation, request.effect_key)
         )
         encode_result(result)
         return {"status": "ok", "result": result}

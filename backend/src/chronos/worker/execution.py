@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from chronos.engine.models import Claim, OwnershipLost
 from chronos.engine.repository import QueueRepository
+from chronos.worker.demo_http import gate
 from chronos.worker.logging import emit
 from chronos.worker.runner import Reply, run_handler
 from chronos.worker.settings import WorkerSettings
@@ -142,6 +143,8 @@ class Execution:
                 reply = Reply(status="retry", error_code="execution_timeout")
             else:
                 reply = child.result()
+            if reply.status == "ok":
+                await gate("before_ack", self.claim.job_id, self.claim.generation)
             keeper.cancel()
             await asyncio.gather(keeper, return_exceptions=True)
             await self.record(reply)
@@ -152,6 +155,14 @@ class Execution:
             if child is not None:
                 child.cancel()
                 await asyncio.gather(child, return_exceptions=True)
+            if isinstance(exc, OwnershipLost):
+                with contextlib.suppress(SQLAlchemyError, TimeoutError):
+                    await db_call(
+                        self.executor,
+                        self.settings.db_call_timeout_s,
+                        self.repo.record_ownership_rejection,
+                        self.claim,
+                    )
             # A cancellation request also invalidates renewal. Stop work FIRST,
             # then acknowledge cancellation if this is still the authorized owner.
             with contextlib.suppress(OwnershipLost, SQLAlchemyError, TimeoutError):

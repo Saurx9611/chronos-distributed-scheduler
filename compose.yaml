@@ -30,11 +30,36 @@ x-worker: &worker
     CHRONOS_WORKER_POLL_INTERVAL_S: ${CHRONOS_WORKER_POLL_INTERVAL_S:-0.5}
     CHRONOS_WORKER_RECOVERY_INTERVAL_S: ${CHRONOS_WORKER_RECOVERY_INTERVAL_S:-2}
     CHRONOS_WORKER_SHUTDOWN_GRACE_S: ${CHRONOS_WORKER_SHUTDOWN_GRACE_S:-20}
-    CHRONOS_WORKER_ALLOWED_HANDLERS: image_metadata,csv_transform,synthetic_report,notification
+    CHRONOS_WORKER_ALLOWED_HANDLERS: ${CHRONOS_WORKER_ALLOWED_HANDLERS:-image_metadata,csv_transform,synthetic_report,notification}
+    CHRONOS_DEMO_SINK_URL: http://effect-sink:8081
+    CHRONOS_DEMO_SINK_TOKEN: ${CHRONOS_DEMO_SINK_TOKEN:-}
+    CHRONOS_ENABLE_EFFECT_DEMO: ${CHRONOS_ENABLE_EFFECT_DEMO:-0}
+    CHRONOS_DEMO_ALLOW_UNSAFE: ${CHRONOS_DEMO_ALLOW_UNSAFE:-0}
+    CHRONOS_FAULT_INJECTION: ${CHRONOS_FAULT_INJECTION:-0}
+    CHRONOS_FAULT_POINT: ${CHRONOS_FAULT_POINT:-}
+    CHRONOS_FAULT_WORKER: ${CHRONOS_FAULT_WORKER:-worker-1}
   depends_on:
     migrate:
       condition: service_completed_successfully
 services:
+  effect-sink:
+    profiles: [faults]
+    image: chronos-worker:local
+    build:
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile
+    command: [".venv/bin/uvicorn", "chronos.demo_sink:app", "--host", "0.0.0.0", "--port", "8081", "--no-access-log"]
+    environment:
+      CHRONOS_DEMO_SINK_TOKEN: ${CHRONOS_DEMO_SINK_TOKEN:-}
+      CHRONOS_FAULT_INJECTION: ${CHRONOS_FAULT_INJECTION:-0}
+      CHRONOS_DEMO_ALLOW_UNSAFE: ${CHRONOS_DEMO_ALLOW_UNSAFE:-0}
+    ports: ["127.0.0.1:${CHRONOS_DEMO_SINK_PORT:-18081}:8081"]
+    volumes: ["effect_data:/data"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 64
   postgres:
     image: postgres:18
     environment:
@@ -94,3 +119,4 @@ services:
     ports: ["127.0.0.1:3000:3000"]
 volumes:
   postgres_data:
+  effect_data:

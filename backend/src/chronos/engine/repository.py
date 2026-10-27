@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import random
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -20,6 +19,7 @@ from chronos.engine.models import (
     Worker,
     WorkerExpired,
 )
+from chronos.engine.retries import retry_delay
 from chronos.engine.sql import CLAIM_SQL, OWNER_PREDICATE
 
 
@@ -31,6 +31,7 @@ def create_queue_engine(url: str | URL, *, pool_size: int = 5) -> Engine:
         max_overflow=0,
         pool_timeout=5,
         pool_pre_ping=True,
+        hide_parameters=True,
         connect_args={"connect_timeout": 5},
     )
 
@@ -52,25 +53,38 @@ class QueueRepository:
             yield conn
 
     @staticmethod
-    def _event(conn: Connection, job: RowMapping, action: str, actor: str) -> None:
+    def _event(
+        conn: Connection,
+        job: RowMapping,
+        action: str,
+        actor: str,
+        reason: str | None = None,
+        from_state: str | None = None,
+    ) -> None:
         params = {
             "job": job["id"],
             "tenant": job["tenant_id"],
             "generation": job["generation"],
             "action": action,
             "actor": actor,
+            "reason": reason or action,
+            "from_state": from_state
+            if from_state is not None
+            else (job.get("prior_state", job["state"]) if action != "submitted" else None),
+            "to_state": job["state"],
         }
         conn.execute(
             text("""
-            INSERT INTO job_events(job_id, generation, event_type, actor_id)
-            VALUES (:job, :generation, :action, :actor)
+            INSERT INTO job_events(
+                job_id, generation, event_type, actor_id,reason,from_state,to_state)
+            VALUES (:job, :generation, :action, :actor,:reason,:from_state,:to_state)
         """),
             params,
         )
         conn.execute(
             text("""
-            INSERT INTO audit_events(tenant_id, entity_id, entity_type, action, actor_id)
-            VALUES (:tenant, :job, 'job', :action, :actor)
+            INSERT INTO audit_events(tenant_id, entity_id, entity_type, action, actor_id,reason)
+            VALUES (:tenant, :job, 'job', :action, :actor,:reason)
         """),
             params,
         )
@@ -99,8 +113,8 @@ class QueueRepository:
             )
             conn.execute(
                 text("""
-                INSERT INTO audit_events(entity_id,entity_type,action,actor_id)
-                VALUES (:id, 'worker', 'registered', :actor)
+                INSERT INTO audit_events(entity_id,entity_type,action,actor_id,reason)
+                VALUES (:id, 'worker', 'registered', :actor,'worker_registered')
             """),
                 {"id": row["id"], "actor": str(row["id"])},
             )
@@ -171,10 +185,11 @@ class QueueRepository:
                 conn.execute(
                     text("""
                 INSERT INTO jobs(id,tenant_id,queue,job_type,payload,priority,
-                    scheduled_at,available_at,max_attempts,execution_timeout_s)
+                    scheduled_at,available_at,max_attempts,execution_timeout_s,effect_key,
+                    retry_base_seconds,retry_cap_seconds)
                 VALUES (:id,:tenant,:queue,:type,CAST(:payload AS jsonb),:priority,
                     COALESCE(:scheduled,statement_timestamp()),
-                    COALESCE(:scheduled,statement_timestamp()),:max_attempts,:timeout)
+                    COALESCE(:scheduled,statement_timestamp()),:max_attempts,:timeout,:id,:base,:cap)
                 RETURNING *
             """),
                     {
@@ -187,6 +202,8 @@ class QueueRepository:
                         "scheduled": spec.scheduled_at,
                         "max_attempts": spec.max_attempts,
                         "timeout": spec.execution_timeout_s,
+                        "base": spec.retry_base_seconds,
+                        "cap": spec.retry_cap_seconds,
                     },
                 )
                 .mappings()
@@ -256,6 +273,7 @@ class QueueRepository:
                         job["job_type"],
                         job["payload"],
                         job["lease_expires_at"],
+                        job["effect_key"],
                     )
                 )
         return claims
@@ -316,11 +334,12 @@ class QueueRepository:
         outcome: str,
         error_code: str | None = None,
         result: str | None = None,
+        recovery_reason: str | None = None,
     ) -> None:
         changed = conn.execute(
             text("""
             UPDATE job_attempts SET outcome=:outcome,finished_at=clock_timestamp(),
-                error_code=:error, result=CAST(:result AS jsonb)
+                error_code=:error, result=CAST(:result AS jsonb), recovery_reason=:reason
                 WHERE job_id=:job AND generation=:generation
                 AND outcome IS NULL RETURNING job_id
         """),
@@ -330,6 +349,7 @@ class QueueRepository:
                 "outcome": outcome,
                 "error": error_code,
                 "result": result,
+                "reason": recovery_reason,
             },
         ).first()
         if changed is None:
@@ -381,7 +401,9 @@ class QueueRepository:
                     else "dead_letter"
                 )
                 outcome = "retryable_error" if mode == "retry" else "permanent_error"
-            delay = random.uniform(0, min(300, 2 ** (current["attempts"] - 1)))
+            delay = retry_delay(
+                current["attempts"], current["retry_base_seconds"], current["retry_cap_seconds"]
+            )
             job = (
                 conn.execute(
                     text(
@@ -405,7 +427,9 @@ class QueueRepository:
             if job is None:
                 raise OwnershipLost()
             self._close_attempt(conn, job, outcome, error_code, result)
-            self._event(conn, job, state, str(claim.worker_id))
+            self._event(
+                conn, job, state, str(claim.worker_id), error_code or state, current["state"]
+            )
 
     def cancel(self, tenant_id: UUID, job_id: UUID, *, actor: str) -> str:
         with self._transaction() as conn:
@@ -435,7 +459,7 @@ class QueueRepository:
                     .mappings()
                     .one()
                 )
-                self._event(conn, job, state, actor)
+                self._event(conn, job, state, actor, "operator_cancellation", current["state"])
         return state
 
     def recover_expired(self, *, limit: int = 100) -> int:
@@ -446,7 +470,8 @@ class QueueRepository:
                 conn.execute(
                     text("""
                 SELECT * FROM jobs WHERE state IN ('running','cancel_requested')
-                  AND lease_expires_at <= clock_timestamp()
+                  AND (lease_expires_at <= clock_timestamp()
+                    OR execution_deadline <= clock_timestamp())
                 ORDER BY id LIMIT :limit FOR UPDATE SKIP LOCKED
             """),
                     {"limit": limit},
@@ -462,7 +487,18 @@ class QueueRepository:
                     if old["attempts"] < old["max_attempts"]
                     else "dead_letter"
                 )
-                delay = random.uniform(0, min(300, 2 ** (old["attempts"] - 1)))
+                delay = retry_delay(
+                    old["attempts"], old["retry_base_seconds"], old["retry_cap_seconds"]
+                )
+                # Re-evaluate time after acquiring the batch's row locks.
+                reason: str = conn.execute(
+                    text("""
+                    SELECT CASE WHEN state='cancel_requested' THEN 'cancellation_expired'
+                        WHEN execution_deadline<=clock_timestamp() THEN 'runtime_exceeded'
+                        ELSE 'lease_expired' END FROM jobs WHERE id=:id
+                """),
+                    {"id": old["id"]},
+                ).scalar_one()
                 job = (
                     conn.execute(
                         text("""
@@ -475,7 +511,8 @@ class QueueRepository:
                             THEN NULL ELSE clock_timestamp() END
                     WHERE id=:id AND generation=:generation AND lease_token=:token
                       AND state IN ('running','cancel_requested')
-                      AND lease_expires_at <= clock_timestamp() RETURNING *
+                      AND (lease_expires_at <= clock_timestamp()
+                        OR execution_deadline <= clock_timestamp()) RETURNING *
                 """),
                         {
                             "state": state,
@@ -490,11 +527,59 @@ class QueueRepository:
                 )
                 if job is not None:
                     self._close_attempt(
-                        conn, job, "cancelled" if state == "cancelled" else "lease_expired"
+                        conn,
+                        job,
+                        "cancelled" if state == "cancelled" else "lease_expired",
+                        recovery_reason=reason,
                     )
-                    self._event(conn, job, "lease_expired", "recovery")
+                    self._event(conn, job, "lease_expired", "recovery", reason, old["state"])
                     recovered += 1
         return recovered
+
+    def monitor_workers(self, *, limit: int = 100) -> int:
+        self._duration(limit, 100)
+        with self._transaction() as conn:
+            rows = conn.execute(
+                text("""
+                WITH stale AS (
+                    SELECT id FROM worker_registrations
+                    WHERE state IN ('active','draining')
+                      AND heartbeat_expires_at<=clock_timestamp()
+                    ORDER BY id LIMIT :limit FOR UPDATE SKIP LOCKED
+                ) UPDATE worker_registrations w SET state='lost' FROM stale
+                WHERE w.id=stale.id AND w.heartbeat_expires_at<=clock_timestamp() RETURNING w.id
+            """),
+                {"limit": limit},
+            ).all()
+            for row in rows:
+                conn.execute(
+                    text("""
+                    INSERT INTO audit_events(entity_id,entity_type,action,actor_id,reason)
+                    VALUES (:id,'worker','lost','monitor','heartbeat_expired')
+                """),
+                    {"id": row[0]},
+                )
+        return len(rows)
+
+    def record_ownership_rejection(self, claim: Claim) -> None:
+        # A separate transaction after the rejected mutation rolled back. No token,
+        # payload or exception text is retained, and current job state is not changed.
+        with self._transaction() as conn:
+            conn.execute(
+                text("""
+                INSERT INTO audit_events(tenant_id,entity_id,entity_type,action,
+                    actor_id,reason,presented_generation)
+                SELECT tenant_id,id,'job','ownership_rejected',:actor,
+                    'state_or_lease_mismatch',:generation FROM jobs
+                WHERE id=:id AND tenant_id=:tenant
+            """),
+                {
+                    "id": claim.job_id,
+                    "tenant": claim.tenant_id,
+                    "actor": str(claim.worker_id),
+                    "generation": claim.generation,
+                },
+            )
 
     def execution_started(self, claim: Claim) -> None:
         with self._transaction() as conn:
@@ -536,8 +621,8 @@ class QueueRepository:
             if changed is not None:
                 conn.execute(
                     text("""
-                    INSERT INTO audit_events(entity_id,entity_type,action,actor_id)
-                    VALUES (:id,'worker',:action,:actor)
+                    INSERT INTO audit_events(entity_id,entity_type,action,actor_id,reason)
+                    VALUES (:id,'worker',:action,:actor,:action)
                 """),
                     {"id": worker.id, "action": state, "actor": str(worker.id)},
                 )

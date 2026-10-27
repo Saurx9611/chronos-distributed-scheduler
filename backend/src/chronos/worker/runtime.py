@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from chronos.engine.models import Worker, WorkerExpired
 from chronos.engine.repository import QueueRepository, create_queue_engine
+from chronos.worker.demo_http import claim_gate
 from chronos.worker.execution import Execution, db_call
 from chronos.worker.logging import emit
 from chronos.worker.settings import WorkerSettings
@@ -45,8 +46,8 @@ class WorkerRuntime:
 
     def check_schema(self) -> None:
         with self.control_engine.connect() as conn:
-            if conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() != "0002":
-                raise RuntimeError("worker requires migration 0002")
+            if conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() != "0003":
+                raise RuntimeError("worker requires migration 0003")
 
     async def pause(self, duration: float) -> None:
         with contextlib.suppress(TimeoutError):
@@ -89,6 +90,13 @@ class WorkerRuntime:
                         heartbeat_due = now + self.settings.heartbeat_interval_s
                         emit("worker_heartbeat", worker_id=str(self.worker.id))
                     if now >= recovery_due:
+                        lost = await db_call(
+                            self.control_threads,
+                            self.settings.db_call_timeout_s,
+                            self.control_repo.monitor_workers,
+                        )
+                        if lost:
+                            emit("workers_lost", count=lost)
                         count = await db_call(
                             self.control_threads,
                             self.settings.db_call_timeout_s,
@@ -110,6 +118,7 @@ class WorkerRuntime:
                             lease_seconds=self.settings.lease_seconds,
                         )
                         for claim in claims:
+                            await claim_gate(claim)
                             emit(
                                 "job_claimed",
                                 job_id=str(claim.job_id),

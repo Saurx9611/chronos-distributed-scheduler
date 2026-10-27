@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 import pytest
-from chronos.engine.models import JobSpec, LeaseWindow, OwnershipLost, WorkerExpired
+from chronos.engine.models import JobSpec, LeaseWindow, OwnershipLost, Worker, WorkerExpired
 from chronos.engine.repository import QueueRepository
 from chronos.worker.execution import Execution
 from chronos.worker.settings import WorkerSettings
@@ -159,8 +159,25 @@ async def test_upgrade_preserves_phase2_jobs_and_registrations(
 ) -> None:
     migrate(db, "0001", downgrade=True)
     tenant = repo.create_tenant("existing-phase2")
-    job = repo.submit(tenant, "existing", JobSpec(job_type="synthetic_report"))
-    worker = repo.register_worker("existing-worker")
+    # Use the old schema's actual insert shape, not the newer repository against
+    # an intentionally downgraded database.
+    with db.begin() as conn:
+        job: UUID = conn.execute(
+            text("""
+            INSERT INTO jobs(tenant_id,queue,job_type,payload)
+            VALUES (:tenant,'default','synthetic_report','{}') RETURNING id
+        """),
+            {"tenant": tenant},
+        ).scalar_one()
+    with db.begin() as conn:
+        row = conn.execute(
+            text("""
+            INSERT INTO worker_registrations(name,heartbeat_expires_at)
+            VALUES ('existing-worker',clock_timestamp()+interval '60 seconds')
+            RETURNING id,heartbeat_token
+        """)
+        ).one()
+        worker = Worker(row[0], row[1])
     migrate(db, "head")
     claim = repo.claim(worker)[0]
     assert claim.job_id == job

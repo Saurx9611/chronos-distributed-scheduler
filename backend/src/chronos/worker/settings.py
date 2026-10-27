@@ -3,12 +3,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
 
 BUILTIN_HANDLERS = frozenset(
-    {"image_metadata", "csv_transform", "synthetic_report", "notification"}
+    {"image_metadata", "csv_transform", "synthetic_report", "notification", "demo_effect"}
 )
 
 
 class WorkerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHRONOS_WORKER_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="CHRONOS_WORKER_", extra="ignore", hide_input_in_errors=True
+    )
     database_url: SecretStr | None = Field(default=None, validation_alias="CHRONOS_DATABASE_URL")
     postgres_host: str = Field(default="localhost", validation_alias="PGHOST")
     postgres_port: int = Field(default=5432, validation_alias="PGPORT", ge=1, le=65535)

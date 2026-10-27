@@ -2,7 +2,7 @@
 
 CLAIM_SQL = """
 WITH candidates AS MATERIALIZED (
-    SELECT id FROM jobs
+    SELECT id, state AS prior_state FROM jobs
     WHERE queue = :queue
       AND state IN ('queued', 'retry_wait')
       AND available_at <= statement_timestamp()
@@ -20,7 +20,7 @@ SET state = 'running', attempts = j.attempts + 1, generation = j.generation + 1,
     started_at = COALESCE(j.started_at, clock_timestamp()),
     attempt_started_at = clock_timestamp(), updated_at = clock_timestamp()
 FROM candidates AS c WHERE j.id = c.id
-RETURNING j.*
+RETURNING j.*, c.prior_state
 """
 
 # Executed only AFTER SELECT ... FOR UPDATE has acquired the job row lock.

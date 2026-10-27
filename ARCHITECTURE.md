@@ -1,6 +1,8 @@
 # Chronos technical design
 
-Status: Phase 3, 2026-10-27. The transactional queue and independent workers are implemented;
+Status: Phase 4, 2026-10-27. Fault tolerance/recovery and explicit authenticated
+retry/replay commands are implemented; see docs/FAULT_TOLERANCE.md and its failure matrix.
+The transactional queue and independent workers are implemented;
 the worker lifecycle, isolation and failure limits are documented in docs/WORKER_RUNTIME.md.
 The detailed
 runtime protocol and exact SQL are in docs/database/TRANSACTIONS.md and take

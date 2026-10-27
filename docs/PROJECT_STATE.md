@@ -1,6 +1,24 @@
 # Project state
 
-Updated: 2026-10-27. Phase 3 complete; local and hosted verification passed.
+Updated: 2026-10-27. Phase 4 implemented; local correctness gates passed, final hosted verification pending.
+
+## Phase 4 implementation and gates
+
+- Migration 0003: per-job effect identity/retry policy, causal event/audit fields,
+  append-only history, command idempotency, scoped HMAC API credentials and rate windows.
+- Expiry/deadline reclamation, lost-heartbeat monitoring and reason-coded stale-owner
+  rejection preserve generation/token fencing. Terminal generations never reopen.
+- Authenticated retry/replay APIs create new jobs with preserved/new effect identity,
+  respectively; worker health is infrastructure-admin only.
+- Real independent HTTP destination and durable crash-boundary gates demonstrate
+  one deduplicated effect versus two unsafe effects after committed work loses its ACK.
+- Local complete process regression: 14 passed; database/API/handler gate: 72 passed.
+  See FAILURE_MODE_MATRIX.md, FAULT_TOLERANCE.md and PHASE4_VERIFICATION.md.
+
+Earlier phases below are historical. Current remaining work includes general job
+submission/read/history APIs, recurring generation, dashboards, performance evidence,
+production grants/retention and deployment. Phase 4 follows the user's recovery scope,
+not the earlier proposed recurrence scope.
 
 ## Phase 3 implementation and gates
 
@@ -98,7 +116,7 @@ production hardening remain release gates. No cloud resources or costs were incu
 
 ## Next step
 
-Next recommended step: Phase 4's transactional recurring scheduler, including
-competing replicas and duplicate-occurrence/crash tests. The separately tracked
-authenticated API gate remains required before public job operations or dashboard integration.
+Next recommended step: complete authenticated job submission/detail/history APIs,
+then the recurring scheduler with competing-replica/occurrence tests. Keep both
+separate from this completed recovery milestone; no subsequent phase was started.
 No later phase is authorized implicitly by this phase's completion.

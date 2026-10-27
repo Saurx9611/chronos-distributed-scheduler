@@ -97,7 +97,10 @@ class Cluster:
         raw = self.command(
             "logs", "--no-log-prefix", "--no-color", "worker-1", "worker-2", "worker-3"
         )
-        if self.env["POSTGRES_PASSWORD"] in raw or "PAYLOAD_MUST_NOT_APPEAR" in raw:
+        secrets_to_redact = [self.env["POSTGRES_PASSWORD"], "PAYLOAD_MUST_NOT_APPEAR"]
+        if self.env.get("CHRONOS_DEMO_SINK_TOKEN"):
+            secrets_to_redact.append(self.env["CHRONOS_DEMO_SINK_TOKEN"])
+        if any(value in raw for value in secrets_to_redact):
             pytest.fail("worker log redaction check failed")
         return [json.loads(line) for line in raw.splitlines() if line.startswith("{")]
 

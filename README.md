@@ -2,12 +2,13 @@
 
 PostgreSQL-backed distributed task scheduling and execution infrastructure.
 
-**Status: Phase 3 — independent distributed workers.** Repository operations implement
+**Status: Phase 4 — distributed fault tolerance and recovery.** Repository operations implement
 idempotent submission, atomic claims, renewal, completion/failure, cancellation,
 expiry recovery and worker registration/heartbeats. Independent workers now execute
 four allowlisted workloads with concurrency, lease renewal, child isolation and
-shutdown/recovery. The only HTTP operation remains process liveness. Authenticated
-job APIs, recurring generation, production deployment and benchmarks remain later phases.
+shutdown/recovery. Authenticated retry/replay and worker-health APIs now exist, with
+reason-coded recovery and real crash/duplicate-effect tests. General submission/read
+APIs, recurring generation, production deployment and benchmarks remain later phases.
 
 ## Design
 
@@ -15,6 +16,8 @@ job APIs, recurring generation, production deployment and benchmarks remain late
 - [Database proposal](docs/database/README.md), [API proposal](docs/API.md)
 - [Implemented transaction protocol and actual claim SQL](docs/database/TRANSACTIONS.md)
 - [Worker runtime, three-process demo and real signal tests](docs/WORKER_RUNTIME.md)
+- [Recovery APIs and fault-tolerance protocol](docs/FAULT_TOLERANCE.md)
+- [Failure-mode matrix and observed outcomes](docs/FAILURE_MODE_MATRIX.md)
 - [PostgreSQL research](docs/POSTGRESQL_RESEARCH.md), [ADRs](docs/adr/0001-postgresql-queue.md)
 - [Threat model](docs/THREAT_MODEL.md), [roadmap](docs/ROADMAP.md)
 - [Verified state and next steps](docs/PROJECT_STATE.md)
@@ -70,7 +73,7 @@ docker compose --profile foundation build
 An unset test URL skips integration tests locally; skipped does not mean passed.
 Set CHRONOS_REQUIRE_DB=1 to require the DB, as CI does. Tests migrate a unique schema
 per case and cover real concurrent consumers; use a disposable development database.
-`alembic heads` reports revision 0002. To install it, set CHRONOS_DATABASE_URL to
+`alembic heads` reports revision 0003. To install it, set CHRONOS_DATABASE_URL to
 `postgresql+psycopg://...`, then run:
 
 ```sh
@@ -106,7 +109,7 @@ backend/
   src/chronos/api/       # current liveness HTTP surface
   src/chronos/engine/    # parameterized transactional queue and ownership models
   src/chronos/worker/    # supervisor, fixed child entry point and allowlisted handlers
-  migrations/           # Alembic revisions 0001/0002
+  migrations/           # Alembic revisions 0001..0003
 frontend/src/app/       # Next.js foundation page
 workers/                # worker operations entry guide
 scheduler/              # recurring generation process design boundary
@@ -114,7 +117,7 @@ infrastructure/docker/  # nonroot API/frontend images
 tests/
   unit/                 # liveness and OpenAPI scope
   integration/          # migrations, transactions, competing consumers and fault injection
-  process/              # three Compose workers, real SIGTERM/SIGKILL and DB outage tests
+  process/              # worker crashes/pauses, real external effects and DB outage tests
   concurrency/          # future process-crash/fault test acceptance
   load/                 # future benchmark methodology
 docs/

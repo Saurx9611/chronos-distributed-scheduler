@@ -7,8 +7,10 @@ import csv
 import hashlib
 import io
 import json
+import os
 import random
 import struct
+import urllib.error
 import zlib
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -16,6 +18,8 @@ from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
+
+from chronos.worker.demo_http import gate, request
 
 
 class PermanentFailure(Exception):
@@ -30,6 +34,11 @@ class RetryableFailure(Exception):
 class Context:
     job_id: UUID
     generation: int
+    effect_key: UUID | None = None
+
+    @property
+    def business_key(self) -> UUID:
+        return self.effect_key or self.job_id
 
 
 class Payload(BaseModel):
@@ -184,9 +193,42 @@ async def notification(payload: dict[str, JsonValue], context: Context) -> dict[
         raise RetryableFailure("notification_transient")
     return {
         "simulated": True,
-        "delivery_key": str(context.job_id),
-        "receipt": hashlib.sha256(str(context.job_id).encode()).hexdigest(),
+        "delivery_key": str(context.business_key),
+        "receipt": hashlib.sha256(str(context.business_key).encode()).hexdigest(),
     }
+
+
+class EffectPayload(Payload):
+    value: str = Field(default="demonstration", min_length=1, max_length=100)
+    idempotent: bool = True
+
+
+async def demo_effect(payload: dict[str, JsonValue], context: Context) -> dict[str, JsonValue]:
+    data = EffectPayload.model_validate(payload)
+    if os.environ.get("CHRONOS_ENABLE_EFFECT_DEMO") != "1":
+        raise PermanentFailure("effect_demo_disabled")
+    if not data.idempotent and os.environ.get("CHRONOS_DEMO_ALLOW_UNSAFE") != "1":
+        raise PermanentFailure("unsafe_demo_disabled")
+    fingerprint = hashlib.sha256(data.value.encode()).hexdigest()
+    # Two-phase demonstration: prepare/validate input, then commit the HTTP effect.
+    await gate("during_execute", context.job_id, context.generation)
+    await asyncio.sleep(data.delay_s)
+    try:
+        result = await asyncio.to_thread(
+            request,
+            "/effects" if data.idempotent else "/unsafe-effects",
+            {
+                "effect_key": str(context.business_key),
+                "fingerprint": fingerprint,
+            },
+        )
+    except urllib.error.HTTPError as exc:
+        if exc.code == 409:
+            raise PermanentFailure("effect_key_conflict") from None
+        raise RetryableFailure("effect_unavailable") from None
+    except OSError, ValueError, RuntimeError:
+        raise RetryableFailure("effect_unavailable") from None
+    return {"effect_key": str(context.business_key), "effect_id": int(result["effect_id"])}
 
 
 HANDLERS = {
@@ -194,6 +236,7 @@ HANDLERS = {
     "csv_transform": csv_transform,
     "synthetic_report": synthetic_report,
     "notification": notification,
+    "demo_effect": demo_effect,
 }
 
 

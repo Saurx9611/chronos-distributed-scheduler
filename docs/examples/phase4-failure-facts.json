@@ -1,0 +1,199 @@
+{
+  "kill-after_claim": {
+    "job_id": "f88427fb-12f8-4e56-88c7-b5c6e608b391",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "12b353b6-6d26-427e-a5ab-c4bae5a61adf",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "owner": "2a6f5f2b-2f6a-4d2d-8847-e0e851c9e378",
+        "outcome": "succeeded",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 1,
+      "requests": 1
+    },
+    "observed_effects": 1
+  },
+  "kill-during_execute": {
+    "job_id": "bd605181-edc0-4aa6-9865-80973a273c7f",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "8562418e-00e7-420f-a0b3-37fe1f37cbe2",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "owner": "a2104cdc-d907-49af-aaa4-bd1e45dd42c5",
+        "outcome": "succeeded",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 1,
+      "requests": 1
+    },
+    "observed_effects": 1
+  },
+  "post-effect-idempotent": {
+    "job_id": "af69962a-b034-46e9-8f73-a06a27744061",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "5dbdb3ab-ef3a-456a-acb5-05c1689f8953",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "owner": "326f4b2f-6450-4235-82be-027e1786dea5",
+        "outcome": "succeeded",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 1,
+      "requests": 2
+    },
+    "idempotent": true,
+    "observed_effects": 1
+  },
+  "post-effect-unsafe": {
+    "job_id": "9d387f05-797b-430f-b9d9-83daa5d86b18",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "438ade7f-8bd8-4aa5-8a4f-e7d72b9378ba",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "owner": "a2feacc7-2073-49cb-8f90-f67d442c622a",
+        "outcome": "succeeded",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 2,
+      "requests": 2
+    },
+    "idempotent": false,
+    "observed_effects": 2
+  },
+  "paused-stale-owner": {
+    "job_id": "824e210c-44d0-4ebc-8c53-25841da1cff1",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "0be93fb2-45b7-40c1-b9ed-b16ca894651b",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "owner": "0a3a5743-8f14-4bb8-b57b-be26303138da",
+        "outcome": "succeeded",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 1,
+      "requests": 2
+    },
+    "stale_success_rejected": true,
+    "heartbeat_state_observed": "lost"
+  },
+  "competing-after-expiration": {
+    "job_id": "a0f681a1-ee88-45ec-94ac-ab7f6c0ad738",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "42576129-bc95-46cc-8f23-50a657f87a1f",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "owner": "945a5685-c725-4c5a-a471-f7725a953e29",
+        "outcome": "succeeded",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 1,
+      "requests": 1
+    },
+    "competitors": 2,
+    "replacement_attempts": 1
+  },
+  "repeated-process-failures": {
+    "job_id": "ede8fd0a-f934-42f1-b3b9-2041a737d320",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "0a4dbc79-6d96-4734-be22-aafb6e81a199",
+        "outcome": "retryable_error",
+        "recovery_reason": null
+      },
+      {
+        "generation": 2,
+        "owner": "0a4dbc79-6d96-4734-be22-aafb6e81a199",
+        "outcome": "retryable_error",
+        "recovery_reason": null
+      },
+      {
+        "generation": 3,
+        "owner": "0a4dbc79-6d96-4734-be22-aafb6e81a199",
+        "outcome": "retryable_error",
+        "recovery_reason": null
+      }
+    ],
+    "sink": {
+      "effects": 0,
+      "requests": 0
+    },
+    "maximum_attempts": 3
+  },
+  "manual-retry-replay-effects": {
+    "job_id": "4f5f5d5f-e0de-483a-89d2-51a56b1517ca",
+    "attempts": [
+      {
+        "generation": 1,
+        "owner": "0358dee9-9a19-40ca-b46f-cc23f0c09e1e",
+        "outcome": "lease_expired",
+        "recovery_reason": "lease_expired"
+      }
+    ],
+    "sink": {
+      "effects": 1,
+      "requests": 2
+    },
+    "retry_id": "b5abcbf5-f374-473e-8141-4eb003dc0978",
+    "replay_id": "604fe03a-1efb-4ed6-9bbd-802142f1def0",
+    "retry_preserved_effect": true,
+    "replay_requested_new_effect": true
+  },
+  "database-disconnect": {
+    "job_id": "c956dc65-b883-4367-b9c6-2bb9b34e2a7f",
+    "outcomes": [
+      {
+        "generation": 1,
+        "outcome": "lease_expired"
+      },
+      {
+        "generation": 2,
+        "outcome": "succeeded"
+      }
+    ],
+    "child_absent_during_outage": true
+  }
+}
