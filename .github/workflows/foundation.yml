@@ -1,4 +1,4 @@
-name: Foundation
+name: Queue and foundation
 on:
   push:
   pull_request:
@@ -23,6 +23,7 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       CHRONOS_TEST_DATABASE_URL: postgresql://chronos_ci:ci-ephemeral-only@localhost:5432/chronos_ci
+      CHRONOS_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

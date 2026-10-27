@@ -43,7 +43,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.14"
 strict = true
-files = ["backend/src", "tests/unit"]
+files = ["backend/src", "backend/migrations/env.py", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

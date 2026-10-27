@@ -1,6 +1,28 @@
 # Project state
 
-Updated: 2026-10-27. Phase 1 complete; Phase 2 has not begun.
+Updated: 2026-10-27. Phase 2 transactional queue implemented; hosted verification pending.
+
+## Phase 2 implementation and local gates
+
+- Alembic 0001: tenants, jobs, job_attempts, schedules, schedule_occurrences,
+  worker_registrations, submission_keys, job_events and audit_events.
+- Validated job submission, UTC scheduling, integer priorities, bounded attempts,
+  DB-time leases/deadlines and generation+UUID ownership tokens.
+- Parameterized READ COMMITTED atomic claim, heartbeat, renewal, success/failure,
+  cancellation and competing expiry recovery repository methods.
+- Claims/attempts/events/audit and finalizations commit atomically; execution occurs
+  outside repository transactions. See database/TRANSACTIONS.md for exact SQL.
+- Current local gates: 42 tests passed, zero skips, against PostgreSQL 18.6;
+  Ruff lint/format, strict mypy (including integration tests), Alembic heads and
+  migration up/down/up passed. Three rounds each verified 8 simultaneous consumers,
+  80 distinct jobs, 80 tokens and consistent ownership records.
+- ADR-0005 records priority/starvation tradeoffs, execution deadlines, idempotency
+  reservations and the narrowed Phase 2 scope requested by the user.
+
+The earlier Phase 1 evidence below remains historical. Current limitations:
+no handler execution process, authenticated job HTTP API, recurring generator,
+automatic DB transaction retries, production audit grants, deployment or benchmark.
+Do not move into those phases until the database gates pass.
 
 ## Implemented
 
@@ -39,7 +61,7 @@ Local Docker's Linux engine is unavailable, so database/container execution was
 verified in hosted CI. Windows sandbox blocked local test/build subprocesses;
 the authorized reruns outside the sandbox passed. See VERIFICATION.md for commands.
 
-## Remaining limitations
+## Phase 1 limitations (historical)
 
 No queue engine, runtime worker, recurring daemon, auth, deployed migration,
 cloud deployment or benchmark exists yet. The DDL is a proposal. Runtime guarantees
@@ -48,6 +70,7 @@ production hardening remain release gates. No cloud resources or costs were incu
 
 ## Next step
 
-Phase 2: promote reviewed schema to an Alembic migration and implement atomic
-claim, renewal and finalization invariants with independent-session PostgreSQL
-tests before adding authenticated job endpoints. Do not begin Phase 2 implicitly.
+After Phase 2 hosted verification, the next recommended step is the separately
+scoped Phase 2B authenticated job API, before any public job operations. Phase 3
+then implements bounded handler execution and process-crash fault injection.
+No later phase is authorized implicitly by this phase's completion.

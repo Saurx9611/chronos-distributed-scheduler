@@ -1,8 +1,13 @@
-# Database design proposal
+# Database schema and transactional queue
 
-`proposal.sql` is executable PostgreSQL 18 DDL, tested in an isolated transaction.
-It is not installed by Docker initialization or Alembic yet. Phase 2 promotes the
-reviewed design into a versioned migration alongside transaction-level tests.
+Phase 2 installs Alembic revision `0001`, defined in
+`backend/migrations/versions/0001_queue.sql`. Read [the implemented transaction
+protocol and exact claim SQL](TRANSACTIONS.md) for current behavior and limits.
+It adds job_attempts, worker registrations/heartbeats, priorities, scheduled intent,
+execution deadlines and independent audit history to the Phase 1 proposal.
+
+`proposal.sql` and the remaining conceptual overview below are retained as the
+historical Phase 1 design; the migration and TRANSACTIONS.md take precedence.
 
 ```mermaid
 erDiagram

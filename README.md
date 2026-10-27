@@ -2,14 +2,17 @@
 
 PostgreSQL-backed distributed task scheduling and execution infrastructure.
 
-**Status: Phase 1 complete — architecture and repository foundation.** The only API operation
-implemented is process liveness. There is no queue execution, auth, recurring daemon,
-production deployment or benchmark yet. The frontend states this scope explicitly.
+**Status: Phase 2 — PostgreSQL transactional queue.** Repository operations implement
+idempotent submission, atomic claims, renewal, completion/failure, cancellation,
+expiry recovery and worker registration/heartbeats. The only HTTP operation remains
+process liveness. Worker execution loops, auth, recurring generation, production
+deployment and benchmarks remain later phases.
 
 ## Design
 
 - [Architecture and diagrams](ARCHITECTURE.md)
 - [Database proposal](docs/database/README.md), [API proposal](docs/API.md)
+- [Implemented transaction protocol and actual claim SQL](docs/database/TRANSACTIONS.md)
 - [PostgreSQL research](docs/POSTGRESQL_RESEARCH.md), [ADRs](docs/adr/0001-postgresql-queue.md)
 - [Threat model](docs/THREAT_MODEL.md), [roadmap](docs/ROADMAP.md)
 - [Verified state and next steps](docs/PROJECT_STATE.md)
@@ -62,10 +65,20 @@ uv run --no-sync alembic -c backend/alembic.ini heads
 docker compose --profile foundation build
 ```
 
-An unset test URL explicitly skips the PostgreSQL test; skipped does not mean passed.
-There are no migration revisions yet, so `alembic heads` returns no heads. Do not
-apply proposal.sql to production. `CHRONOS_DATABASE_URL` is reserved for Alembic
-and must use `postgresql+psycopg://...` when revisions are added in Phase 2.
+An unset test URL skips integration tests locally; skipped does not mean passed.
+Set CHRONOS_REQUIRE_DB=1 to require the DB, as CI does. Tests migrate a unique schema
+per case and cover real concurrent consumers; use a disposable development database.
+`alembic heads` reports revision 0001. To install it, set CHRONOS_DATABASE_URL to
+`postgresql+psycopg://...`, then run:
+
+```sh
+uv run --no-sync alembic -c backend/alembic.ini upgrade head
+```
+
+Apply migrations before runtime services start. Do not apply historical proposal.sql
+alongside migrations. Downgrading to base destroys data and is only for disposable DBs.
+The migration URL and the integration-test URL are separate deliberately: tests own
+isolated schemas and do not install application tables in your default schema.
 
 Run the minimal surfaces in separate terminals:
 
@@ -84,16 +97,16 @@ foundation up --build` to run the containerized foundation. Stop local services 
 ```text
 backend/
   src/chronos/api/       # current liveness HTTP surface
-  src/chronos/engine/    # planned queue transaction boundary
-  migrations/           # Alembic environment; no revision yet
+  src/chronos/engine/    # parameterized transactional queue and ownership models
+  migrations/           # Alembic revision 0001 and versioned SQL
 frontend/src/app/       # Next.js foundation page
 workers/                # execution process design boundary
 scheduler/              # recurring generation process design boundary
 infrastructure/docker/  # nonroot API/frontend images
 tests/
   unit/                 # liveness and OpenAPI scope
-  integration/          # real PostgreSQL DDL proposal checks
-  concurrency/          # future competing worker/fault test acceptance
+  integration/          # migrations, transactions, competing consumers and fault injection
+  concurrency/          # future process-crash/fault test acceptance
   load/                 # future benchmark methodology
 docs/
   adr/                  # decisions 0001–0004

@@ -1,7 +1,10 @@
 # Chronos technical design
 
-Status: Phase 1 design baseline, 2026-10-27. Queue algorithms below are proposals,
-not implemented engine behavior. See docs/PROJECT_STATE.md for verified work.
+Status: Phase 2, 2026-10-27. The transactional queue is implemented; the detailed
+runtime protocol and exact SQL are in docs/database/TRANSACTIONS.md and take
+precedence over the original design sketches below. Worker execution, recurring
+generation, authenticated HTTP APIs and deployment remain later-phase designs.
+See docs/PROJECT_STATE.md for verification evidence.
 
 ## Scope and assumptions
 
@@ -119,7 +122,7 @@ WITH candidates AS (
   SELECT id FROM jobs
   WHERE queue = :queue AND state IN ('queued', 'retry_wait')
     AND available_at <= statement_timestamp() AND attempts < max_attempts
-  ORDER BY available_at, id
+ORDER BY priority DESC, available_at, id
   LIMIT :free_slots FOR UPDATE SKIP LOCKED
 )
 UPDATE jobs AS j SET state = 'running', attempts = attempts + 1,
@@ -220,7 +223,8 @@ not transaction-pooled PgBouncer. Polling remains mandatory after reconnect/star
 NOTIFY carries only a queue hint and can be lost; it never contains job payloads.
 
 FIFO is approximate: SKIP LOCKED and multiple workers reorder starts and completions.
-No strict priorities initially; oldest available job first within a queue. Serve configured
+Phase 2 supports integer priorities, descending before eligibility time; sustained high
+priority traffic can starve low priorities. The planned worker loop will serve configured
 queues round-robin with per-queue concurrency and admission quotas to limit starvation.
 Monitor oldest age; reject submission at quota with 429. Tune indexes using EXPLAIN
 (ANALYZE, BUFFERS) on representative load, monitor autovacuum and dead tuples, and
