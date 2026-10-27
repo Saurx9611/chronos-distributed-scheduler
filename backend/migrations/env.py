@@ -4,8 +4,16 @@ import os
 
 from alembic import context
 from sqlalchemy import Connection, create_engine, pool
+from sqlalchemy.engine import URL
 
-database_url = os.environ.get("CHRONOS_DATABASE_URL", "")
+database_url = os.environ.get("CHRONOS_DATABASE_URL") or URL.create(
+    "postgresql+psycopg",
+    username=os.environ.get("PGUSER", "chronos"),
+    password=os.environ.get("PGPASSWORD"),
+    host=os.environ.get("PGHOST", "localhost"),
+    port=int(os.environ.get("PGPORT", "5432")),
+    database=os.environ.get("PGDATABASE", "chronos"),
+)
 
 
 def migrate(connection: Connection) -> None:

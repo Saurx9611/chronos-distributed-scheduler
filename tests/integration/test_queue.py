@@ -27,7 +27,7 @@ def row(db: Engine, job_id: UUID) -> RowMapping:
 
 def test_migration_down_up(db: Engine) -> None:
     with db.connect() as conn:
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0001"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0002"
         indexes: set[str] = set(
             conn.execute(
                 text("SELECT indexname FROM pg_indexes WHERE schemaname=current_schema()")

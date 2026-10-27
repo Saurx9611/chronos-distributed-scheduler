@@ -1,6 +1,23 @@
 # Project state
 
-Updated: 2026-10-27. Phase 2 transactional queue complete; local and hosted gates passed.
+Updated: 2026-10-27. Phase 3 independent workers implemented; final hosted verification pending.
+
+## Phase 3 implementation and gates
+
+- Standalone Python worker, separate control/lease pools, bounded child-process
+  execution, typed allowlisted workloads, lease guards, heartbeats and recovery.
+- Four real data-only workloads: PNG metadata, CSV transformation, seeded report,
+  and explicitly simulated notification with deterministic delivery identity.
+- Migration 0002 records execution dispatch/result and worker lifecycle state.
+- Compose's workers profile runs PostgreSQL, one migrator and three independent
+  workers. Signals, lease loss, DB disconnects and timeouts stop or abandon work safely.
+- Local database/runtime and handler tests passed; six real Linux Compose scenarios
+  passed, including SIGTERM, SIGKILL, forced drain and PostgreSQL stop/restart.
+- See WORKER_RUNTIME.md and PHASE3_VERIFICATION.md for exact reproduction and evidence.
+
+Phase 1/2 evidence below is historical. Remaining current limits: no authenticated
+job HTTP API, recurring generation, production deployment, downstream exactly-once
+effects or throughput benchmark. No later-phase features were started.
 
 ## Phase 2 implementation and local gates
 
@@ -74,7 +91,7 @@ production hardening remain release gates. No cloud resources or costs were incu
 
 ## Next step
 
-Next recommended step: Phase 3 bounded handler execution, heartbeat/recovery loops,
-graceful shutdown and process-crash fault injection. Implement the separately
-tracked authenticated API gate before any public job operations or dashboard integration.
+Next recommended step: Phase 4's transactional recurring scheduler, including
+competing replicas and duplicate-occurrence/crash tests. The separately tracked
+authenticated API gate remains required before public job operations or dashboard integration.
 No later phase is authorized implicitly by this phase's completion.

@@ -1,8 +1,10 @@
 # Infrastructure boundary
 
 Compose provides local PostgreSQL 18 and optional foundation API/frontend builds.
-`docker compose --profile foundation up --build` starts all three. No worker or
-scheduler service is declared until an executable entry point exists.
+`docker compose --profile foundation up --build` starts those three services.
+The workers profile adds one Alembic migrator and worker-1/worker-2/worker-3,
+with explicit migration completion dependencies, bounded resources and SIGTERM
+draining. See docs/WORKER_RUNTIME.md. The recurring scheduler is not implemented yet.
 
 Planned Railway topology: managed PostgreSQL; independent API, frontend, worker
 and scheduler services; one migration job; protected metrics collection. No Railway

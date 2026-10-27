@@ -2,17 +2,19 @@
 
 PostgreSQL-backed distributed task scheduling and execution infrastructure.
 
-**Status: Phase 2 — PostgreSQL transactional queue.** Repository operations implement
+**Status: Phase 3 — independent distributed workers.** Repository operations implement
 idempotent submission, atomic claims, renewal, completion/failure, cancellation,
-expiry recovery and worker registration/heartbeats. The only HTTP operation remains
-process liveness. Worker execution loops, auth, recurring generation, production
-deployment and benchmarks remain later phases.
+expiry recovery and worker registration/heartbeats. Independent workers now execute
+four allowlisted workloads with concurrency, lease renewal, child isolation and
+shutdown/recovery. The only HTTP operation remains process liveness. Authenticated
+job APIs, recurring generation, production deployment and benchmarks remain later phases.
 
 ## Design
 
 - [Architecture and diagrams](ARCHITECTURE.md)
 - [Database proposal](docs/database/README.md), [API proposal](docs/API.md)
 - [Implemented transaction protocol and actual claim SQL](docs/database/TRANSACTIONS.md)
+- [Worker runtime, three-process demo and real signal tests](docs/WORKER_RUNTIME.md)
 - [PostgreSQL research](docs/POSTGRESQL_RESEARCH.md), [ADRs](docs/adr/0001-postgresql-queue.md)
 - [Threat model](docs/THREAT_MODEL.md), [roadmap](docs/ROADMAP.md)
 - [Verified state and next steps](docs/PROJECT_STATE.md)
@@ -39,7 +41,7 @@ npm --prefix frontend ci
 uv run --no-sync ruff check .
 uv run --no-sync ruff format --check .
 uv run --no-sync mypy
-uv run --no-sync pytest -q -m "not integration"
+uv run --no-sync pytest -q -m "not integration and not compose"
 npm --prefix frontend run lint
 npm --prefix frontend run typecheck
 npm --prefix frontend run build
@@ -60,7 +62,7 @@ In PowerShell use `$env:CHRONOS_TEST_DATABASE_URL = '...'`; POSIX uses
 test creates a unique schema, validates proposal constraints and rolls it back.
 
 ```sh
-uv run --no-sync pytest -q
+uv run --no-sync pytest -q -m "not compose"
 uv run --no-sync alembic -c backend/alembic.ini heads
 docker compose --profile foundation build
 ```
@@ -68,7 +70,7 @@ docker compose --profile foundation build
 An unset test URL skips integration tests locally; skipped does not mean passed.
 Set CHRONOS_REQUIRE_DB=1 to require the DB, as CI does. Tests migrate a unique schema
 per case and cover real concurrent consumers; use a disposable development database.
-`alembic heads` reports revision 0001. To install it, set CHRONOS_DATABASE_URL to
+`alembic heads` reports revision 0002. To install it, set CHRONOS_DATABASE_URL to
 `postgresql+psycopg://...`, then run:
 
 ```sh
@@ -79,6 +81,11 @@ Apply migrations before runtime services start. Do not apply historical proposal
 alongside migrations. Downgrading to base destroys data and is only for disposable DBs.
 The migration URL and the integration-test URL are separate deliberately: tests own
 isolated schemas and do not install application tables in your default schema.
+
+To run three independent worker processes and actual workloads, follow
+[the worker demo](docs/WORKER_RUNTIME.md#configuration-and-reproduction).
+The Compose process tests use a separate CHRONOS_RUN_COMPOSE_TESTS=1 gate and do
+not require the integration suite's database URL; they create disposable clusters.
 
 Run the minimal surfaces in separate terminals:
 
@@ -98,14 +105,16 @@ foundation up --build` to run the containerized foundation. Stop local services 
 backend/
   src/chronos/api/       # current liveness HTTP surface
   src/chronos/engine/    # parameterized transactional queue and ownership models
-  migrations/           # Alembic revision 0001 and versioned SQL
+  src/chronos/worker/    # supervisor, fixed child entry point and allowlisted handlers
+  migrations/           # Alembic revisions 0001/0002
 frontend/src/app/       # Next.js foundation page
-workers/                # execution process design boundary
+workers/                # worker operations entry guide
 scheduler/              # recurring generation process design boundary
 infrastructure/docker/  # nonroot API/frontend images
 tests/
   unit/                 # liveness and OpenAPI scope
   integration/          # migrations, transactions, competing consumers and fault injection
+  process/              # three Compose workers, real SIGTERM/SIGKILL and DB outage tests
   concurrency/          # future process-crash/fault test acceptance
   load/                 # future benchmark methodology
 docs/

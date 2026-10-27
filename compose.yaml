@@ -1,4 +1,39 @@
 name: chronos
+x-worker: &worker
+  profiles: [workers]
+  image: chronos-worker:local
+  build:
+    context: .
+    dockerfile: infrastructure/docker/backend.Dockerfile
+  command: [".venv/bin/python", "-m", "chronos.worker"]
+  restart: ${CHRONOS_WORKER_RESTART:-unless-stopped}
+  stop_signal: SIGTERM
+  stop_grace_period: 35s
+  read_only: true
+  tmpfs: ["/tmp:size=64m"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  mem_limit: 512m
+  pids_limit: 128
+  environment: &worker-env
+    PGHOST: postgres
+    PGUSER: ${POSTGRES_USER:-chronos}
+    PGDATABASE: ${POSTGRES_DB:-chronos}
+    PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    PYTHONDONTWRITEBYTECODE: "1"
+    CHRONOS_WORKER_QUEUE: ${CHRONOS_WORKER_QUEUE:-default}
+    CHRONOS_WORKER_CONCURRENCY: ${CHRONOS_WORKER_CONCURRENCY:-2}
+    CHRONOS_WORKER_LEASE_SECONDS: ${CHRONOS_WORKER_LEASE_SECONDS:-30}
+    CHRONOS_WORKER_RENEW_INTERVAL_S: ${CHRONOS_WORKER_RENEW_INTERVAL_S:-5}
+    CHRONOS_WORKER_HEARTBEAT_INTERVAL_S: ${CHRONOS_WORKER_HEARTBEAT_INTERVAL_S:-5}
+    CHRONOS_WORKER_WORKER_TTL_SECONDS: ${CHRONOS_WORKER_WORKER_TTL_SECONDS:-60}
+    CHRONOS_WORKER_POLL_INTERVAL_S: ${CHRONOS_WORKER_POLL_INTERVAL_S:-0.5}
+    CHRONOS_WORKER_RECOVERY_INTERVAL_S: ${CHRONOS_WORKER_RECOVERY_INTERVAL_S:-2}
+    CHRONOS_WORKER_SHUTDOWN_GRACE_S: ${CHRONOS_WORKER_SHUTDOWN_GRACE_S:-20}
+    CHRONOS_WORKER_ALLOWED_HANDLERS: image_metadata,csv_transform,synthetic_report,notification
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
 services:
   postgres:
     image: postgres:18
@@ -15,6 +50,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  migrate:
+    profiles: [workers]
+    image: chronos-worker:local
+    build:
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile
+    command: [".venv/bin/alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-chronos}
+      PGDATABASE: ${POSTGRES_DB:-chronos}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  worker-1:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      CHRONOS_WORKER_NAME: worker-1
+  worker-2:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      CHRONOS_WORKER_NAME: worker-2
+  worker-3:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      CHRONOS_WORKER_NAME: worker-3
   api:
     profiles: [foundation]
     build:

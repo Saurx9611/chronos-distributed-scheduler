@@ -50,6 +50,12 @@ class Claim:
     lease_expires_at: datetime
 
 
+@dataclass(frozen=True)
+class LeaseWindow:
+    lease_remaining_s: float
+    execution_remaining_s: float
+
+
 class OwnershipLost(Exception):
     """The supplied lease is stale, expired, cancelled or otherwise invalid."""
 

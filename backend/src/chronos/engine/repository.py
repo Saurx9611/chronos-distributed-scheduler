@@ -15,6 +15,7 @@ from chronos.engine.models import (
     Claim,
     IdempotencyConflict,
     JobSpec,
+    LeaseWindow,
     OwnershipLost,
     Worker,
     WorkerExpired,
@@ -119,6 +120,7 @@ class QueueRepository:
                     heartbeat_expires_at=clock_timestamp() + make_interval(secs => :ttl)
                 WHERE id=:id AND heartbeat_token=:token
                   AND heartbeat_expires_at > clock_timestamp()
+                  AND state IN ('active','draining')
                 RETURNING id
             """),
                 {"id": worker.id, "token": worker.heartbeat_token, "ttl": ttl_seconds},
@@ -209,6 +211,7 @@ class QueueRepository:
                 SELECT id FROM worker_registrations
                 WHERE id=:id AND heartbeat_token=:token
                   AND heartbeat_expires_at > clock_timestamp()
+                  AND state='active'
             """),
                 {"id": worker.id, "token": worker.heartbeat_token},
             ).first()
@@ -276,7 +279,7 @@ class QueueRepository:
         # This is a separate command: expiry is evaluated only after the lock is held.
         conn.execute(text("SELECT id FROM jobs WHERE id=:id FOR UPDATE"), {"id": job_id})
 
-    def renew(self, claim: Claim, *, lease_seconds: int = 30) -> None:
+    def renew(self, claim: Claim, *, lease_seconds: int = 30) -> LeaseWindow:
         self._duration(lease_seconds, 300)
         with self._transaction() as conn:
             self._lock(conn, claim.job_id)
@@ -289,7 +292,11 @@ class QueueRepository:
                     updated_at=clock_timestamp()
                 WHERE """
                         + OWNER_PREDICATE
-                        + " RETURNING *"
+                        + """ RETURNING *,
+                        EXTRACT(EPOCH FROM lease_expires_at-clock_timestamp()) AS lease_remaining,
+                        EXTRACT(EPOCH FROM execution_deadline-clock_timestamp())
+                            AS execution_remaining
+                        """
                     ),
                     self._owner_params(claim) | {"seconds": lease_seconds},
                 )
@@ -299,15 +306,22 @@ class QueueRepository:
             if job is None:
                 raise OwnershipLost()
             self._event(conn, job, "renewed", str(claim.worker_id))
+            window = LeaseWindow(float(job["lease_remaining"]), float(job["execution_remaining"]))
+        return window
 
     @staticmethod
     def _close_attempt(
-        conn: Connection, job: RowMapping, outcome: str, error_code: str | None = None
+        conn: Connection,
+        job: RowMapping,
+        outcome: str,
+        error_code: str | None = None,
+        result: str | None = None,
     ) -> None:
         changed = conn.execute(
             text("""
             UPDATE job_attempts SET outcome=:outcome,finished_at=clock_timestamp(),
-                error_code=:error WHERE job_id=:job AND generation=:generation
+                error_code=:error, result=CAST(:result AS jsonb)
+                WHERE job_id=:job AND generation=:generation
                 AND outcome IS NULL RETURNING job_id
         """),
             {
@@ -315,13 +329,19 @@ class QueueRepository:
                 "generation": job["generation"],
                 "outcome": outcome,
                 "error": error_code,
+                "result": result,
             },
         ).first()
         if changed is None:
             raise RuntimeError("attempt invariant violated")
 
-    def acknowledge(self, claim: Claim) -> None:
-        self._finish(claim, mode="success")
+    def acknowledge(self, claim: Claim, *, result: dict[str, Any] | None = None) -> None:
+        encoded = (
+            json.dumps(result, allow_nan=False, ensure_ascii=False) if result is not None else None
+        )
+        if encoded is not None and len(encoded.encode()) > 65536:
+            raise ValueError("result exceeds 64 KiB")
+        self._finish(claim, mode="success", result=encoded)
 
     def fail(
         self, claim: Claim, *, retryable: bool = True, error_code: str = "handler_error"
@@ -333,7 +353,9 @@ class QueueRepository:
     def acknowledge_cancellation(self, claim: Claim) -> None:
         self._finish(claim, mode="cancel")
 
-    def _finish(self, claim: Claim, *, mode: str, error_code: str | None = None) -> None:
+    def _finish(
+        self, claim: Claim, *, mode: str, error_code: str | None = None, result: str | None = None
+    ) -> None:
         with self._transaction() as conn:
             self._lock(conn, claim.job_id)
             predicate = OWNER_PREDICATE
@@ -382,7 +404,7 @@ class QueueRepository:
             )
             if job is None:
                 raise OwnershipLost()
-            self._close_attempt(conn, job, outcome, error_code)
+            self._close_attempt(conn, job, outcome, error_code, result)
             self._event(conn, job, state, str(claim.worker_id))
 
     def cancel(self, tenant_id: UUID, job_id: UUID, *, actor: str) -> str:
@@ -473,3 +495,49 @@ class QueueRepository:
                     self._event(conn, job, "lease_expired", "recovery")
                     recovered += 1
         return recovered
+
+    def execution_started(self, claim: Claim) -> None:
+        with self._transaction() as conn:
+            self._lock(conn, claim.job_id)
+            job = (
+                conn.execute(
+                    text("SELECT * FROM jobs WHERE " + OWNER_PREDICATE), self._owner_params(claim)
+                )
+                .mappings()
+                .first()
+            )
+            if job is None:
+                raise OwnershipLost()
+            changed = conn.execute(
+                text("""
+                UPDATE job_attempts SET execution_started_at=clock_timestamp()
+                WHERE job_id=:job_id AND generation=:generation
+                    AND outcome IS NULL AND execution_started_at IS NULL RETURNING job_id
+            """),
+                self._owner_params(claim),
+            ).first()
+            if changed is None:
+                raise RuntimeError("attempt already started")
+            self._event(conn, job, "execution_started", str(claim.worker_id))
+
+    def worker_state(self, worker: Worker, state: str) -> None:
+        if state not in ("draining", "stopped"):
+            raise ValueError("invalid worker lifecycle transition")
+        with self._transaction() as conn:
+            changed = conn.execute(
+                text("""
+                UPDATE worker_registrations SET state=:state
+                WHERE id=:id AND heartbeat_token=:token
+                  AND (state='active' OR (state='draining' AND :state='stopped'))
+                RETURNING id
+            """),
+                {"id": worker.id, "token": worker.heartbeat_token, "state": state},
+            ).first()
+            if changed is not None:
+                conn.execute(
+                    text("""
+                    INSERT INTO audit_events(entity_id,entity_type,action,actor_id)
+                    VALUES (:id,'worker',:action,:actor)
+                """),
+                    {"id": worker.id, "action": state, "actor": str(worker.id)},
+                )

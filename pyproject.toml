@@ -47,4 +47,7 @@ files = ["backend/src", "backend/migrations/env.py", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: requires CHRONOS_TEST_DATABASE_URL pointing at a disposable PostgreSQL database"]
+markers = [
+  "integration: requires CHRONOS_TEST_DATABASE_URL pointing at a disposable PostgreSQL database",
+  "compose: real Linux worker processes and signals; requires Docker and CHRONOS_RUN_COMPOSE_TESTS=1",
+]

@@ -1,9 +1,11 @@
 # Chronos technical design
 
-Status: Phase 2, 2026-10-27. The transactional queue is implemented; the detailed
+Status: Phase 3, 2026-10-27. The transactional queue and independent workers are implemented;
+the worker lifecycle, isolation and failure limits are documented in docs/WORKER_RUNTIME.md.
+The detailed
 runtime protocol and exact SQL are in docs/database/TRANSACTIONS.md and take
-precedence over the original design sketches below. Worker execution, recurring
-generation, authenticated HTTP APIs and deployment remain later-phase designs.
+precedence over the original design sketches below. Recurring generation,
+authenticated HTTP APIs and deployment remain later-phase designs.
 See docs/PROJECT_STATE.md for verification evidence.
 
 ## Scope and assumptions
